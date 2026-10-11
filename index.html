@@ -22,17 +22,19 @@
   .topbar { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; gap:8px; }
   .steps { display:flex; gap:8px; }
   .dot {
-    width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    font-size:20px; font-weight:800; color:#fff; background:#c7d3de; transition:all .3s;
+    width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:19px; font-weight:800; color:#fff; background:#c7d3de; transition:all .3s;
     box-shadow: inset 0 -3px 0 rgba(0,0,0,.08);
   }
   .dot.active { background:#ff9d2e; transform:scale(1.12); box-shadow:0 4px 10px rgba(255,157,46,.5); }
   .dot.done { background:#4caf50; }
-  .dot .check { font-size:22px; }
-  .soundbtn {
-    border:none; background:#ffffffcc; border-radius:999px; padding:10px 14px; font-size:18px; font-weight:800; color:#2b3a4a;
+  .dot .check { font-size:21px; }
+  .rightbtns { display:flex; gap:8px; }
+  .tbtn {
+    border:none; background:#ffffffcc; border-radius:999px; padding:9px 12px; font-size:16px; font-weight:800; color:#2b3a4a;
     box-shadow:0 2px 6px rgba(0,0,0,.12);
   }
+  .tbtn.on { background:#d7f6dd; color:#1f7a32; }
   /* ===== narration banner ===== */
   .banner {
     margin:2px 12px 0; padding:10px 14px; background:#ffffffdd; border-radius:16px; text-align:center;
@@ -44,8 +46,8 @@
   .layer { position:absolute; inset:0; pointer-events:none; will-change:transform; }
   #layerFar  { z-index:1; }
   #layerMid  { z-index:2; }
-  #layerNearBack { z-index:3; }   /* station, signs — behind the train */
-  #layerNearFront { z-index:6; }  /* crossing — in front of the train */
+  #layerNearBack { z-index:3; }   /* stations, signs — behind the train */
+  #layerNearFront { z-index:6; }  /* crossings — in front of the train */
   .scn { position:absolute; line-height:1; filter:drop-shadow(0 2px 2px rgba(0,0,0,.1)); }
   .cloud { position:absolute; font-size:40px; opacity:.85; animation: drift 40s linear infinite; }
   @keyframes drift { from{ transform:translateX(0) } to{ transform:translateX(-30vw) } }
@@ -90,7 +92,7 @@
   }
   #trainWrap.hasRider .rider { display:block; }
 
-  /* ===== penguin (step 1) ===== */
+  /* ===== penguin ===== */
   #penguin {
     position:absolute; bottom:calc(24% + 6px); left:3%; font-size:min(17vw,82px);
     transition: left .7s ease, bottom .7s ease, transform .3s;
@@ -110,7 +112,7 @@
   .tapring {
     position:absolute; border:5px dashed #ff5e5e; border-radius:50%;
     width:130px; height:130px; left:2%; bottom:calc(24% - 2px); z-index:6; pointer-events:none;
-    animation: ring 1.1s ease-out infinite; opacity:0;
+    animation: ring 1.1s ease-out infinite; opacity:0; display:none;
   }
   @keyframes ring { 0%{transform:scale(.7);opacity:.9} 100%{transform:scale(1.25);opacity:0} }
 
@@ -145,6 +147,7 @@
     font-size:14px; font-weight:900; color:#2b5a8a; margin-bottom:4px; white-space:nowrap;
     box-shadow:0 2px 4px rgba(0,0,0,.12);
   }
+  .station.transfer .sign { border-color:#e0892b; color:#b5651a; }
 
   /* ===== big action buttons ===== */
   .actionWrap { position:absolute; left:0; right:0; bottom:3%; display:flex; justify-content:center; z-index:8; }
@@ -184,7 +187,10 @@
       <div class="dot" id="dot2">2</div>
       <div class="dot" id="dot3">3</div>
     </div>
-    <button class="soundbtn" id="soundBtn">🔊 おと</button>
+    <div class="rightbtns">
+      <button class="tbtn" id="modeBtn">🔀 のりかえ</button>
+      <button class="tbtn" id="soundBtn">🔊 おと</button>
+    </div>
   </div>
 
   <div class="banner" id="banner">ペンギンさんを タッチしてね</div>
@@ -260,10 +266,11 @@ const TRAINS = [
 
 /* ============ state ============ */
 let soundOn = true;
-let step = 1;
-let phase = 'board';   // board | ready | travel | arrived
+let transferMode = true;        // 乗り換えモード（既定ON）
+let phase = 'board';            // board | ready1 | travel | transfer | ready2 | arrived
 let roundIdx = 0;
 let yardTrains = [];
+let legTrains = [];             // このラウンドで乗った電車たち
 let current = null;
 
 const stage = document.getElementById('stage');
@@ -277,6 +284,7 @@ const dots = [null, document.getElementById('dot1'), document.getElementById('do
 const yardLabel = document.getElementById('yardLabel');
 const yard = document.getElementById('yard');
 const soundBtn = document.getElementById('soundBtn');
+const modeBtn = document.getElementById('modeBtn');
 const layerFar = document.getElementById('layerFar');
 const layerMid = document.getElementById('layerMid');
 const layerNearBack = document.getElementById('layerNearBack');
@@ -315,13 +323,17 @@ function speak(text){
 
 /* ============ helpers ============ */
 function setStep(n){
-  step = n;
   for(let i=1;i<=3;i++){
     dots[i].classList.remove('active','done'); dots[i].textContent = i;
     if(i<n){ dots[i].classList.add('done'); dots[i].innerHTML='<span class="check">✓</span>'; }
     else if(i===n){ dots[i].classList.add('active'); }
   }
 }
+function showTapring(mode){
+  tapring.style.display='block';
+  tapring.style.left = (mode==='transfer') ? '38%' : '2%';
+}
+function hideTapring(){ tapring.style.display='none'; }
 function sparkleAt(x,y){
   const emos=['✨','⭐','🎉','💫'];
   for(let i=0;i<6;i++){
@@ -333,51 +345,66 @@ function sparkleAt(x,y){
 }
 
 /* ============ world / scenery ============ */
-let stageW = 0, totalScroll = 0, crossingX = 0;
-let crossingEl = null;
+let stageW = 0, totalScroll = 0, midScroll = 0;
+let crossings = [];
 
 function addScn(layer, emo, x, bottom, size){
   const s=document.createElement('div'); s.className='scn'; s.textContent=emo;
   s.style.left=x+'px'; s.style.bottom=bottom; s.style.fontSize=size+'px';
   layer.appendChild(s);
 }
+function addStation(worldX, sign, emoji, isTransfer){
+  const st=document.createElement('div'); st.className='station'+(isTransfer?' transfer':'');
+  st.style.left=worldX+'px';
+  st.innerHTML='<div class="sign">'+sign+'</div><div class="bld">'+emoji+'</div>';
+  layerNearBack.appendChild(st);
+}
+function makeCrossing(worldX){
+  const el=document.createElement('div');
+  el.className='crossing open';
+  el.style.left=worldX+'px';
+  el.innerHTML = `
+    <div class="cx-buck">✕</div>
+    <div class="cx-lights"><span class="lt l1"></span><span class="lt l2"></span></div>
+    <div class="cx-pole"></div>
+    <div class="gate"></div>`;
+  layerNearFront.appendChild(el);
+  crossings.push({ el:el, x:worldX, on:false, done:false, timer:null });
+}
 
 function buildScenery(){
   layerFar.innerHTML=''; layerMid.innerHTML=''; layerNearBack.innerHTML=''; layerNearFront.innerHTML='';
+  cleanupCrossings();
+  crossings = [];
   stageW = stage.clientWidth || window.innerWidth;
-  totalScroll = stageW * 2.2;
+  totalScroll = stageW * 2.4;
+  midScroll = totalScroll * 0.5;
   const worldW = totalScroll + stageW;
 
-  /* far: mountains + Mt. Fuji (scroll x0.25 → place over wider span) */
+  /* far: mountains + Mt. Fuji */
   for(let x=stageW*0.15; x < worldW*0.8; x += stageW*(0.45+Math.random()*0.35)){
     addScn(layerFar, '⛰️', x, 'calc(24% + 34px)', 42+Math.random()*22);
   }
   addScn(layerFar, '🗻', worldW*0.35, 'calc(24% + 34px)', 72);
-  /* mid: trees, houses & birds (scroll x0.55) */
+  /* mid: trees, houses & birds */
   const midEmo=['🌳','🌲','🏠','🌻','🌳','🏡'];
   for(let x=stageW*0.35; x < worldW*1.3; x += stageW*(0.22+Math.random()*0.28)){
     addScn(layerMid, midEmo[(Math.random()*midEmo.length)|0], x, 'calc(24% + 16px)', 28+Math.random()*18);
   }
   addScn(layerMid, '🐦', worldW*0.5, '62%', 24);
   addScn(layerMid, '🐦', worldW*0.9, '70%', 20);
-  /* near back: station (with sign) at the end of the line */
-  const st=document.createElement('div'); st.className='station';
-  st.style.left=(totalScroll + stageW*0.58)+'px';
-  st.innerHTML='<div class="sign">おでかけえき</div><div class="bld">🚉</div>';
-  layerNearBack.appendChild(st);
 
-  /* near front: crossing */
-  crossingX = stageW * 1.5;
-  crossingEl = document.createElement('div');
-  crossingEl.className='crossing';
-  crossingEl.style.left=crossingX+'px';
-  crossingEl.innerHTML = `
-    <div class="cx-buck">✕</div>
-    <div class="cx-lights"><span class="lt l1"></span><span class="lt l2"></span></div>
-    <div class="cx-pole"></div>
-    <div class="gate"></div>`;
-  crossingEl.classList.add('open');   /* gate starts up; closes when the train approaches */
-  layerNearFront.appendChild(crossingEl);
+  if(transferMode){
+    /* a crossing in each leg */
+    makeCrossing(stageW*1.05);
+    makeCrossing(stageW*2.10);
+    /* transfer station in the middle, goal station at the end */
+    addStation(midScroll + stageW*0.45, 'のりかええき', '🚉', true);
+    addStation(totalScroll + stageW*0.50, 'ゴールえき', '🚉', false);
+  } else {
+    makeCrossing(stageW*1.55);
+    addStation(totalScroll + stageW*0.58, 'おでかけえき', '🚉', false);
+  }
 
   setScroll(0);
 }
@@ -390,32 +417,31 @@ function setScroll(d){
   ties.style.backgroundPosition  = (-d)+'px 0';
 }
 
-/* ============ crossing sound ============ */
-let kanTimer=null, kanFlip=false, kanOn=false, crossingDone=false;
-function startKankan(){
-  if(kanOn) return; kanOn=true;
-  crossingEl.classList.add('active');
-  crossingEl.classList.remove('open');   /* gate comes down */
+/* ============ crossings ============ */
+let kanFlip=false;
+function startCrossing(cx){
+  if(cx.on) return; cx.on=true;
+  cx.el.classList.add('active');
+  cx.el.classList.remove('open');            /* gate comes down */
   banner.textContent = 'カンカンカン ふみきり！ 🚦';
   speak('カンカンカン。ふみきりだよ');
-  kanTimer=setInterval(()=>{ kanFlip=!kanFlip; tone(kanFlip?820:660,0.14,'square',0.07); },450);
+  cx.timer=setInterval(()=>{ kanFlip=!kanFlip; tone(kanFlip?820:660,0.14,'square',0.07); },450);
 }
-function stopKankan(){
-  if(!kanOn) return; kanOn=false;
-  clearInterval(kanTimer); kanTimer=null;
-  crossingEl.classList.remove('active');
-  crossingEl.classList.add('open');      /* gate goes back up */
+function stopCrossing(cx){
+  if(!cx.on) return; cx.on=false;
+  clearInterval(cx.timer); cx.timer=null;
+  cx.el.classList.remove('active');
+  cx.el.classList.add('open');               /* gate goes back up */
   banner.textContent = 'でんしゃが はしっているよ 🚃💨';
 }
+function cleanupCrossings(){
+  crossings.forEach(cx=>{ if(cx.timer){ clearInterval(cx.timer); cx.timer=null; } cx.on=false; });
+}
 
-/* ============ journey ============ */
-const DURATION = 11000;
-function easeInOutCubic(p){ return p<0.5 ? 4*p*p*p : 1-Math.pow(-2*p+2,3)/2; }
-
+/* ============ travel fx ============ */
 let smokeTimer=null, clackTimer=null;
 function startTravelFx(){
   trainWrap.classList.add('traveling');
-  /* smoke puffs from the front of the train */
   smokeTimer=setInterval(()=>{
     const tr = trainWrap.getBoundingClientRect(), sr = stage.getBoundingClientRect();
     const p=document.createElement('div'); p.className='puff'; p.textContent='💨';
@@ -424,7 +450,6 @@ function startTravelFx(){
     stage.appendChild(p);
     setTimeout(()=>p.remove(),1500);
   },620);
-  /* soft clack-clack rhythm */
   clackTimer=setInterval(()=>{ tone(170,0.05,'square',0.045); tone(150,0.05,'square',0.04,0.13); },700);
 }
 function stopTravelFx(){
@@ -433,47 +458,51 @@ function stopTravelFx(){
   clearInterval(clackTimer); clackTimer=null;
 }
 
-function journey(){
+/* ============ a travel leg ============ */
+const FULL_DURATION = 12000;
+function easeInOutCubic(p){ return p<0.5 ? 4*p*p*p : 1-Math.pow(-2*p+2,3)/2; }
+
+function runLeg(fromD, toD, onDone){
   phase='travel';
-  crossingDone=false;
+  const dist = toD - fromD;
+  const legDur = FULL_DURATION * (dist/totalScroll);
   let t0=null;
   trainWrap.classList.add('bob');
   startTravelFx();
   function frame(now){
     if(t0===null) t0=now;
-    const p=Math.min(1,(now-t0)/DURATION);
-    const d=easeInOutCubic(p)*totalScroll;
+    const p=Math.min(1,(now-t0)/legDur);
+    const d = fromD + easeInOutCubic(p)*dist;
     setScroll(d);
-    if(!crossingDone && crossingEl){
-      const cx = crossingX - d; /* crossing's screen x */
-      if(cx < stageW*1.05) startKankan();
-      if(cx < stageW*0.02){ stopKankan(); crossingDone=true; }
-    }
-    if(p<1){ requestAnimationFrame(frame); } else { arrive(); }
+    crossings.forEach(cx=>{
+      if(cx.done) return;
+      const sx = cx.x - d;                      /* crossing screen x */
+      if(!cx.on && sx < stageW*1.05 && sx > -stageW*0.1) startCrossing(cx);
+      if(cx.on && sx < stageW*0.02){ stopCrossing(cx); cx.done=true; }
+    });
+    if(p<1){ requestAnimationFrame(frame); }
+    else { trainWrap.classList.remove('bob'); stopTravelFx(); onDone(); }
   }
   requestAnimationFrame(frame);
 }
 
 /* ============ game flow ============ */
-function loadTrain(){
-  const t = TRAINS[roundIdx % TRAINS.length];
-  trainWrap.innerHTML = t.svg() + '<div class="rider">🐧</div>';
-  return t;
-}
+function makeTrain(t){ trainWrap.innerHTML = t.svg() + '<div class="rider">🐧</div>'; return t; }
 
 function startRound(){
-  /* safety: stop any leftover crossing sound/timers */
-  if(kanTimer){ clearInterval(kanTimer); kanTimer=null; }
-  kanOn=false;
+  cleanupCrossings();
   stopTravelFx();
-  current = loadTrain();
+  legTrains = [];
+  current = TRAINS[roundIdx % TRAINS.length];
+  makeTrain(current);
   buildScenery();
   trainWrap.classList.remove('bob','hasRider','traveling');
+  trainWrap.style.transition=''; trainWrap.style.transform='';
   penguin.classList.remove('onboard','hop');
-  penguin.style.transition=''; penguin.style.left='';   /* back to start position */
+  penguin.style.transition=''; penguin.style.left=''; penguin.style.bottom='';
   penguin.style.display='block';
   penguin.classList.add('pulse');
-  tapring.style.display='block';
+  showTapring('start');
   departBtn.classList.remove('show');
   againBtn.classList.remove('show');
   phase='board';
@@ -482,40 +511,97 @@ function startRound(){
   speak('ペンギンさんを、でんしゃに のせてね');
 }
 
-/* STEP 1: tap penguin → boards and RIDES the train */
-penguin.addEventListener('click', ()=>{
-  ensureAudio();
-  if(phase!=='board') return;
-  phase='ready';
+/* board the train currently on screen */
+function boardTrain(readyPhase){
+  phase=readyPhase;
   buzz(30);
   penguin.classList.remove('pulse');
-  tapring.style.display='none';
+  hideTapring();
+  penguin.style.transition='left .7s ease, bottom .7s ease, transform .3s';
+  penguin.style.left=''; penguin.style.bottom='';     /* let .onboard position it */
   penguin.classList.add('onboard');
   chimeTap(); chimeGood();
-  setTimeout(()=>{
-    penguin.style.display='none';
-    trainWrap.classList.add('hasRider');   /* penguin now rides ON the train */
-  }, 750);
-  setStep(2);
+  setTimeout(()=>{ penguin.style.display='none'; trainWrap.classList.add('hasRider'); }, 750);
   banner.textContent = 'じょうず！ 「しゅっぱつ」を おしてね';
   speak('じょうずだね。つぎは、しゅっぱつ ボタンを おしてね');
   setTimeout(()=>departBtn.classList.add('show'), 600);
+}
+
+/* STEP: tap penguin */
+penguin.addEventListener('click', ()=>{
+  ensureAudio();
+  if(phase==='board'){
+    if(!transferMode) setStep(2);
+    boardTrain('ready1');
+  } else if(phase==='transfer'){
+    boardTrain('ready2');
+  }
 });
 
-/* STEP 2: depart → world scrolls, crossing passes */
+/* depart button */
 departBtn.addEventListener('click', ()=>{
   ensureAudio();
-  if(phase!=='ready') return;
+  if(phase!=='ready1' && phase!=='ready2') return;
   buzz(40);
   departBtn.classList.remove('show');
-  setStep(3);
   banner.textContent = 'しゅっぱーつ！ 🚂💨';
   speak('しゅっぱーつ！');
   tootDepart();
-  journey();
+  if(phase==='ready1'){
+    if(transferMode) runLeg(0, midScroll, arriveTransfer);
+    else runLeg(0, totalScroll, arriveGoal);
+  } else {
+    runLeg(midScroll, totalScroll, arriveGoal);
+  }
 });
 
-/* arrival */
+/* ===== arrive at transfer station ===== */
+function arriveTransfer(){
+  phase='transferArriving';
+  trainWrap.classList.remove('bob');
+  legTrains.push(current.key);                 /* rode the 1st train */
+  setStep(2);
+  /* penguin hops off onto the platform */
+  trainWrap.classList.remove('hasRider');
+  penguin.style.transition='left .6s ease, bottom .6s ease, transform .3s';
+  penguin.style.left='44%'; penguin.style.bottom='calc(24% + 6px)';
+  penguin.style.display='block';
+  penguin.classList.add('hop');
+  setTimeout(()=>penguin.classList.remove('hop'), 1600);
+  banner.textContent = 'のりかええき とうちゃく！';
+  speak('のりかええき、とうちゃく。でんしゃを のりかえるよ');
+  fanfare();
+  setTimeout(slideToNextTrain, 1700);
+}
+
+function slideToNextTrain(){
+  /* old train slides away to the left */
+  trainWrap.style.transition='transform 1s ease';
+  trainWrap.style.transform='translateX(-240%)';
+  tone(300,0.4,'sawtooth',0.1);
+  setTimeout(()=>{
+    /* swap to the next train, place it off-screen right */
+    current = TRAINS[(roundIdx+1) % TRAINS.length];
+    makeTrain(current);
+    trainWrap.classList.remove('traveling');
+    trainWrap.style.transition='none';
+    trainWrap.style.transform='translateX(240%)';
+    void trainWrap.offsetWidth;                /* reflow */
+    /* new train slides in to position */
+    trainWrap.style.transition='transform 1s ease';
+    trainWrap.style.transform='translateX(0)';
+    tootDepart();
+    setTimeout(()=>{
+      phase='transfer';
+      penguin.classList.add('pulse');
+      showTapring('transfer');
+      banner.textContent = 'のりかえ！ ペンギンさんを タッチ';
+      speak('あたらしい でんしゃに のりかえるよ。ペンギンさんを タッチしてね');
+    }, 1050);
+  }, 1050);
+}
+
+/* ===== arrive at goal station ===== */
 function confettiRain(){
   const emos=['🎊','🎉','⭐','✨'];
   for(let i=0;i<16;i++){
@@ -527,20 +613,21 @@ function confettiRain(){
   }
 }
 
-function arrive(){
+function arriveGoal(){
   phase='arrived';
   trainWrap.classList.remove('bob');
   stopTravelFx();
-  /* penguin hops off the train and jumps for joy at the station */
+  legTrains.push(current.key);                 /* rode the last train */
+  /* penguin hops off and jumps for joy */
   trainWrap.classList.remove('hasRider');
   penguin.style.transition='none';
-  penguin.style.left='58%';
+  penguin.style.left='58%'; penguin.style.bottom='';
   penguin.classList.remove('onboard');
   penguin.style.display='block';
   penguin.classList.add('hop');
   setTimeout(()=>penguin.classList.remove('hop'), 3000);
 
-  addTrainToYard(current);
+  addTrainsToYard(legTrains);
   const n = yardTrains.length;
   const milestone = (n>0 && n%5===0);
   if(milestone){
@@ -549,8 +636,9 @@ function arrive(){
     confettiRain();
     fanfare(); setTimeout(fanfare, 600);
   } else {
-    banner.textContent = 'とうちゃく！ でんしゃが ふえたよ 🎉';
-    speak('とうちゃく！ よくできました。でんしゃが、ふえたよ');
+    const t = transferMode ? 'とうちゃく！ のりかえ できたね！ 🎉' : 'とうちゃく！ でんしゃが ふえたよ 🎉';
+    banner.textContent = t;
+    speak(transferMode ? 'とうちゃく！ のりかえ、じょうずに できたね。でんしゃが ふえたよ' : 'とうちゃく！ よくできました。でんしゃが、ふえたよ');
     fanfare();
   }
   const r = stage.getBoundingClientRect();
@@ -568,20 +656,24 @@ againBtn.addEventListener('click', ()=>{
 });
 
 /* ============ yard / collection ============ */
-function renderYard(markNew){
+function renderYard(newCount){
   [...yard.querySelectorAll('.yardtrain')].forEach(el=>el.remove());
   const resetBtn = document.getElementById('resetBtn');
+  const total = yardTrains.length;
   yardTrains.forEach((k,i)=>{
     const t = TRAINS.find(x=>x.key===k) || TRAINS[0];
     const span=document.createElement('span');
-    span.className='yardtrain'+(markNew && i===yardTrains.length-1?' new':'');
+    span.className='yardtrain'+(i >= total-newCount ? ' new':'');
     span.textContent=t.emoji;
     yard.insertBefore(span, resetBtn);
   });
-  yardLabel.textContent = 'でんしゃ '+yardTrains.length+'だい';
+  yardLabel.textContent = 'でんしゃ '+total+'だい';
   save();
 }
-function addTrainToYard(t){ yardTrains.push(t.key); renderYard(true); }
+function addTrainsToYard(arr){
+  arr.forEach(k=>yardTrains.push(k));
+  renderYard(arr.length);
+}
 
 function save(){ try{ localStorage.setItem('penguinTrainYard', JSON.stringify(yardTrains)); localStorage.setItem('penguinRoundIdx', roundIdx); }catch(e){} }
 function load(){
@@ -590,7 +682,8 @@ function load(){
     const r = parseInt(localStorage.getItem('penguinRoundIdx')||'0',10); if(!isNaN(r)) roundIdx=r;
   }catch(e){}
 }
-/* reset: two-tap guard so one stray tap can't erase the collection */
+
+/* reset: two-tap guard */
 const resetBtn = document.getElementById('resetBtn');
 let resetArmed=false, resetTimer=null;
 resetBtn.addEventListener('click', ()=>{
@@ -603,12 +696,26 @@ resetBtn.addEventListener('click', ()=>{
   }
   clearTimeout(resetTimer); resetArmed=false;
   resetBtn.classList.remove('armed'); resetBtn.textContent='さいしょから';
-  yardTrains=[]; roundIdx=0; renderYard(false); startRound();
+  yardTrains=[]; roundIdx=0; renderYard(0); startRound();
 });
 
-/* sound toggle (preference remembered) */
+/* ===== mode toggle (のりかえ あり/なし) ===== */
+function applyMode(){
+  modeBtn.textContent = transferMode ? '🔀 のりかえ' : '➡️ いっぽん';
+  modeBtn.classList.toggle('on', transferMode);
+}
+modeBtn.addEventListener('click', ()=>{
+  ensureAudio();
+  transferMode=!transferMode;
+  try{ localStorage.setItem('penguinTransfer', transferMode?'1':'0'); }catch(e){}
+  applyMode();
+  startRound();
+});
+
+/* ===== sound toggle ===== */
 function applySound(){
   soundBtn.textContent = soundOn ? '🔊 おと' : '🔇 おと';
+  soundBtn.classList.toggle('on', soundOn);
   if(!soundOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
 }
 soundBtn.addEventListener('click', ()=>{
@@ -618,22 +725,21 @@ soundBtn.addEventListener('click', ()=>{
   if(soundOn) ensureAudio();
 });
 
-/* pause speech when the app goes to background; wake audio on return */
+/* pause speech when backgrounded */
 document.addEventListener('visibilitychange', ()=>{
-  if(document.hidden){
-    if('speechSynthesis' in window) window.speechSynthesis.cancel();
-  } else {
-    ensureAudio();
-  }
+  if(document.hidden){ if('speechSynthesis' in window) window.speechSynthesis.cancel(); }
+  else { ensureAudio(); }
 });
 
-/* init */
+/* ============ init ============ */
 load();
 try{ if(localStorage.getItem('penguinSoundOn')==='0') soundOn=false; }catch(e){}
+try{ const m=localStorage.getItem('penguinTransfer'); if(m!==null) transferMode = (m==='1'); }catch(e){}
 applySound();
-renderYard(false);
+applyMode();
+renderYard(0);
 startRound();
-window.addEventListener('resize', ()=>{ if(phase==='board'||phase==='ready') buildScenery(); });
+window.addEventListener('resize', ()=>{ if(phase==='board') buildScenery(); });
 </script>
 </body>
 </html>
